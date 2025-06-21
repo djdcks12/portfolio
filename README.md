@@ -7,7 +7,6 @@
 - [콘텐츠 개발](./content-development.md)
 - [인게임 오브젝트 개발](./ingame-objects.md)
 - [캐릭터 스킬 개발](./character-skills.md)
-- [인게임 버그 개선](./bugfixes.md)
 - [시스템 최적화 및 자동화](./optimization.md)
 
 ---
