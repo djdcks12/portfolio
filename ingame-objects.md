@@ -53,7 +53,7 @@
   - 기획자가 단계별 설정할 수 있도록 맵툴에 데이터 연동
  
   <br>
-  <img src="./images/display-cabinet.png" alt="장식장 오브젝트 예시" width="300"/>
+  <img src="./images/box.png" alt="장식장 오브젝트 예시" width="300"/>
 ---
 
 ## 🍬 과자 감옥
@@ -65,7 +65,7 @@
   - 감옥 상태 시 시각적 강조 및 애니메이션 처리
  
   <br>
-  <img src="./images/display-cabinet.png" alt="장식장 오브젝트 예시" width="300"/>
+  <img src="./images/jail.png" alt="장식장 오브젝트 예시" width="300"/>
 ---
 
 ## 🌊 해류
