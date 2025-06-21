@@ -13,8 +13,7 @@
   - 캐릭터마다 다른 탐색 조건(십자 범위, 3*3범위 등)을 지원할 수 있도록 확장성 있게 설계
   - 특정 조건에 따른 fallback 처리(우선순위 동률 시 랜덤 선택 등) 포함
 
-<br>
-<img src="./images/skill-scan-system.png" alt="스킬 범위 탐색 기능 다이어그램" width="500"/>
+<img src="./images/skill-scan-system.png" alt="스킬 범위 탐색 기능 다이어그램" width="250"/>
 
 ---
 
