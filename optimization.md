@@ -31,7 +31,7 @@
 ### 💬 담당 역할 및 기여
 
 - 라이브 게임 운영 중 발생한 팝업 지연, 리소스 충돌 등의 문제를 직접 인지하고 구조 개선 제안
-- `Popup.Show()`를 포함한 팝업 시스템 로직을 **전면 재설계 및 리팩토링**
+- 팝업 호출 시스템 로직을 **전면 재설계 및 리팩토링**
 - 번들 참조 및 로드 구조를 단일화하고, **공통 리소스 분리 및 의존성 정리 체계 도입**
 - 빌드 최적화를 위한 LZ4 기반 에셋 번들 포맷 전환 및 리소스 중복 지양
 
@@ -61,28 +61,9 @@
 
 ##### 🧭 개선 방향
 
-- `Popup.Show()` 함수 전면 재작성 → **팝업 프리팹을 에셋 번들에 포함**
+- 팝업 호출 함수 전면 재작성 → **팝업 프리팹을 에셋 번들에 포함**
 - 번들 포맷을 **LZMA → LZ4**로 변경하여 로딩 속도 향상
 - 프리팹은 메모리에 **캐싱 및 재사용**, 번들은 리소스 **바인딩 없이** 최초 1회만 로드
-
-```csharp
-public void ShowPopup<T>(string popupPath) where T : BasePopup
-{
-    if (_cache.TryGetValue(popupPath, out var cachedPopup))
-    {
-        cachedPopup.Open();
-        return;
-    }
-
-    AssetBundleLoader.LoadAsync<GameObject>(popupPath, prefab =>
-    {
-        var popup = Instantiate(prefab).GetComponent<T>();
-        _cache[popupPath] = popup;
-        popup.Open();
-    });
-}
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
 
 ----
 
@@ -98,19 +79,7 @@ public void ShowPopup<T>(string popupPath) where T : BasePopup
 - 특정 계열 콘텐츠 번들 로드시, 반드시 해당 계열 common_resource 선행 로드 강제
 - 개선 이후 만들어지는 번들들은 공통 번들을 제외한 번들 간 참조 금지 정책 도입
 
-```csharp
-public IEnumerator LoadPopupWithCommon(string popupBundlePath)
-{
-    yield return AssetBundleLoader.LoadAsync("common_resource");
-    yield return AssetBundleLoader.LoadAsync(popupBundlePath);
-
-    var popupPrefab = AssetBundleLoader.Instantiate(popupBundlePath);
-    popupPrefab.GetComponent<BasePopup>().Open();
-}
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
-
---- 
+---
 
 ## 2. 맵 데이터 저장 구조 개선
 라이브 게임에서 사용되는 5000개 이상의 맵 데이터를 안정적으로 저장하고 효율적으로 배포하기 위해,
@@ -152,29 +121,6 @@ Git 기반의 데이터 버전 관리, LZ4 압축 포맷 도입, Jenkins + Slack
 - 각 기획자가 Git을 통해 맵을 개별 관리하고 히스토리를 남길 수 있도록 환경 구성
 - Git의 버전 관리 기능을 설명하고 기획자 설득을 통해 도입 성공
 
-```bash
-before
-📁 Maps/
- ┣ 📄 stage_001.json
-// stage_2~4 유실
- ┣ 📄 stage_005.json
-// stage_6~8 유실
- ┣ 📄 stage_009.json
- ┣ ...
- ┣ 📄 stage_5000.byte
- ┣ 📄 total_map.json
-
-after
-📁 Maps/
- ┣ 📄 stage_001.byte
- ┣ 📄 stage_002.byte
- ┣ 📄 stage_003.byte
- ┣ 📄 stage_004.byte
- ┣ ...
- ┣ 📄 stage_5000.byte
-```
-<sub>※ 실제 구조가 아닌 예시입니다.</sub>
-
 ----
 
 #### ✅ 2. LZ4 기반 바이너리 포맷 저장
@@ -187,17 +133,6 @@ after
 - 각 맵 파일을 LZ4 압축된 바이너리 포맷으로 저장하여 용량을 대폭 절감
 - 맵툴 및 런타임 환경에서 로드 속도 개선 + 네트워크 전송 비용 감소
 
-```csharp
-// 저장
-var bytes = LZ4Codec.Encode(Encoding.UTF8.GetBytes(json));
-File.WriteAllBytes(path, bytes);
-
-// 로드
-var decompressed = Encoding.UTF8.GetString(LZ4Codec.Decode(File.ReadAllBytes(path)));
-```
-
-<sub>※ 실제 저장/로드 코드가 아닌 예시입니다.</sub>
-
 ----
 
 #### ✅ 3. Jenkins + Slack 자동화 빌드 구성
@@ -209,22 +144,6 @@ var decompressed = Encoding.UTF8.GetString(LZ4Codec.Decode(File.ReadAllBytes(pat
 ##### 🧭 개선 방향
 - Jenkins를 통해 맵 데이터를 Git에서 자동 취합 후 LZ4로 압축 → AWS S3 업로드
 - Slack Webhook을 통해 맵 빌드 완료 후 알림 + 다운로드 링크 공유
-
-```bash
-# Jenkins Job
-1. git pull
-2. MapMergeTool 실행 → LZ4 패킹
-3. AWS CLI → S3 업로드
-4. Slack 알림 전송 (맵 변경 리스트 포함)
-```
-```json
-// Slack 알림 예시
-📦 서영찬 : 맵 빌드 완료
-🕒 2025-06-20 14:12
-📄 변경된 스테이지: stage_0143, stage_0399, stage_1021
-🔗 다운로드: https://s3.amazonaws.com/maps/latest/lz4_map_bundle.zip
-```
-<sub>※ 실제 파이프라인이 아닌 예시입니다.</sub>
 
 ----
 
@@ -278,19 +197,6 @@ var decompressed = Encoding.UTF8.GetString(LZ4Codec.Decode(File.ReadAllBytes(pat
 - JSON → 객체 직렬화 자동 매핑으로 구조화된 모델 관리 가능
 - 반복 로직 제거 및 성능 개선 → 3000회 반복 시 1200ms → 985ms, 메모리 사용량 75% 절감
 
-```csharp
-// Before
-int myReward = data["reward"]["my"].AsInt;
-
-// After
-[Serializable]
-public class RewardModel { public int my; }
-
-var reward = JsonSerialization.FromJson<RewardModel>(json);
-int myReward = reward.my;
-```
-<sub>※ 실제 파싱 파트가 아닌 예시입니다.</sub>
-
 ----
 
 ## 4. 월드맵 드로우콜 최적화
@@ -330,18 +236,6 @@ UI 요소 수가 늘어날수록 드로우콜이 기하급수적으로 증가하
 🧭 개선 방향
 - 말풍선, 텍스트 등 공통 요소는 Canvas를 분리하고 풀링 구조로 관리 <br> 기본 상태에서 배치를 70미만으로 유지되도록 개선
 - 공통적으로 사용하는 스프라이트는 Atlas로 묶고 리소스 중복 제거 <br> 팝업이 여러개 뜨더라도 배치가 100을 넘지 않도록 유지
-
-```csharp
-// 풀링 시스템 예시
-if (!textBalloonPool.TryGet(out var textBalloon))
-{
-    textBalloon = Instantiate(balloonPrefab);
-}
-textBalloon.SetData(stageInfo);
-textBalloon.Show();
-textBalloon.Rotate();
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
 
 ----
 
@@ -383,20 +277,6 @@ textBalloon.Rotate();
 - Atlas 이미지 생성시 필요한 세팅 자동 적용
 - 바로 번들로 압축 가능한 상태까지 구성
 
-```csharp
-[MenuItem("Tools/Auto Atlas Builder")]
-private static void BuildAtlas()
-{
-    var inputPath = EditorUtility.OpenFolderPanel("리소스 폴더 선택", "", "");
-    var outputPath = "Assets/Bundles/AtlasOutput";
-
-    ResourceImporter.Import(inputPath);
-    AtlasBuilder.Generate(outputPath);
-    AssetBundleBuilder.Build(outputPath);
-}
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
-
 ----
 
 #### ✅ 2. 커스텀 드롭다운 및 테이블 뷰 컴포넌트 개발
@@ -410,22 +290,6 @@ private static void BuildAtlas()
 - 커스텀 Inspector 컴포넌트로 모듈화 (Dropdown, Foldable Table, Inline Array 등)
 - 실제 라이브 툴에 적용 → 팀 내의 개발자 작업 효율 향상
 
-
-```csharp
-[CustomEditor(typeof(RewardTable))]
-public class RewardTableEditor : Editor
-{
-    public override void OnInspectorGUI()
-    {
-        DrawDropdown("보상 타입", rewardTypeList);
-        DrawTableView(rewardList);
-    }
-}
-
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
-
-<div align="center"> 🧩 이 툴들은 현재도 팀 내에서 활발하게 사용 중이며, 협업 효율성 증대, 반복 작업 최소화 등에 기여를 하고 있습니다. </div>
 
 ----
 
@@ -465,29 +329,6 @@ public class RewardTableEditor : Editor
 - 미션 목표, 특수 블록 생성 가능성, 매칭 범위 등을 종합적으로 고려한 우선순위 계산
 - 에디터 상에서 자동 플레이 실행 및 결과 통계 확인 가능
 
-```csharp
-// 오토플레이 판단 로직 예시
-public MatchAction EvaluateBestAction(Board board)
-{
-    var candidates = board.FindAllPossibleMatches();
-
-    return candidates
-        .Select(match => new { match, score = CalculateScore(match, board) })
-        .OrderByDescending(x => x.score)
-        .First().match;
-}
-
-private float CalculateScore(MatchAction match, Board board)
-{
-    float score = 0f;
-    score += match.MatchCount * weightMatch;
-    score += EvaluateMissionProgress(match) * weightMission;
-    score += EvaluateSpecialBlockPotential(match) * weightSpecial;
-    return score;
-}
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
-
 #### ✅ 2. ML-Agents 기반 확장 연구
 
 ##### 🧭 연구 방향
@@ -519,27 +360,6 @@ private float CalculateScore(MatchAction match, Board board)
 - Burst Job을 활용하여 프레임 드롭 없이 실시간 연산 처리
 - 가장 많은 오브젝트에 닿는 최적 각도를 자동 설정하여 터치 시 바로 발사
 
-```csharp
-[BurstCompile]
-public struct LaserRangeCalcJob : IJobParallelFor
-{
-    [ReadOnly] public NativeArray<float2> objectPositions;
-    public float laserWidth;
-    public float laserLength;
-    public float angle;
-
-    public NativeArray<int> hitCounts;
-
-    public void Execute(int index)
-    {
-        // 직사각형 범위 내 오브젝트 포함 여부를 수학적으로 계산
-        var rotatedRect = CalculateRotatedRect(angle, laserWidth, laserLength);
-        hitCounts[index] = CountObjectsInRect(rotatedRect, objectPositions);
-    }
-}
-```
-<sub>※ 실제 코드가 아닌 예시입니다.</sub>
-
 ----
 
 ## 8. 셔플 시 특수 블록 조합 배치
@@ -562,18 +382,6 @@ public struct LaserRangeCalcJob : IJobParallelFor
 #### 🧭 개선 방향
 - 가로/세로 방향 기준으로 한 칸 스왑하면 5개가 연결되는 12가지 프리-패턴을 수학적으로 도출
 - 셔플 시 보드 상태를 확인하여 패턴 배치가 가능하면 적용, 불가능하면 일반 재배치 수행
-
-```
-// 5개 일렬 프리-패턴 예시 (가로 기준, O=동일 블록, X=스왑 대상)
-패턴 1: X O O O O  (X를 오른쪽으로 스왑)
-패턴 2: O X O O O  (X를 왼쪽으로 스왑)
-패턴 3: O X O O O  (X를 오른쪽으로 스왑)
-패턴 4: O O X O O  (X를 왼쪽으로 스왑)
-패턴 5: O O X O O  (X를 오른쪽으로 스왑)
-패턴 6: O O O X O  (X를 왼쪽으로 스왑)
-// + 세로 방향 동일 패턴 6가지 = 총 12가지
-```
-<sub>※ 실제 패턴이 아닌 설명용 예시입니다.</sub>
 
 ----
 

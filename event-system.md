@@ -35,20 +35,13 @@
 ### ✅ 1. 시트 구조 개선 (기획자 편의성 + 휴먼 이슈 최소화)
 
 #### 🎯 문제점
-- 모든 이벤트 설정을 JSON 문자열로 `event_script` 단일 필드에 작성
+- 모든 이벤트 설정을 JSON 문자열로 단일 필드에 작성
 - 한눈에 보기 어렵고, 복잡한 구조로 인해 실수와 유지보수 어려움이 잦음
 
 #### 🧭 개선 방향
 - JSON 기반 → **컬럼 기반의 표준화된 시트 구조**로 전환
 - 기획자/서버 개발자와 긴밀히 협업하여 **실무에 최적화된 시트 포맷 직접 제안 및 주도**
 - 구조 통일을 통해 자동 파싱, 재사용 가능성 향상
-
-| id | event_id | _event_name        | category | key         | value     |
-|----|----------|--------------------|----------|-------------|-----------|
-| 1  | 1        | 공룡 키우기 이벤트  | 공통     | 이벤트 종료 | 0         |
-| 2  | 1        | 공룡 키우기 이벤트  | 보상체계 | 주간 보상   | 체력 아이템 |
-
-<sub>※ 실제 사용된 데이터가 아닌 예시입니다.</sub>
 
 ---
 
@@ -59,23 +52,9 @@
 - 구조 파악이 어렵고, 폴리싱 및 버그 수정 시 코드 분석이 비효율적
 
 #### 🧭 개선 방향
-- `BaseEventController<T>`를 제네릭 및 인터페이스 기반으로 추상화
-- 이벤트 별 전용 컨트롤러는 필요한 로직만 `override`해 구현
+- 공통 이벤트 컨트롤러를 제네릭 및 인터페이스 기반으로 추상화
+- 이벤트 별 전용 컨트롤러는 필요한 로직만 override해 구현
 - **기능은 Controller**, **UI는 View에서만 처리**하는 구조 확립
-
-```csharp
-public interface IDinosaurEventController : IEventController
-{
-    void ShowDinosaur();
-}
-
-public class DinosaurEventController :
-    BaseEventController<DinosaurEventController, DinosaurEventControllerData, IDinosaurEventController>
-{
-    // 전용 로직만 override
-}
-```
-<sub>※ 실제 사용된 클래스가 아닌 예시입니다.</sub>
 
 ### ✅ 3. 이벤트 서버 API 통합 및 처리 방식 개선
 
@@ -88,22 +67,6 @@ public class DinosaurEventController :
 - 이벤트 ID 기반의 공통 모델을 통해 클라이언트 개발이 서버 개발보다 선행 가능
 - 공통 모델 파싱 + 자동 갱신으로 생산성과 확장성 확보
 
-```json
-// /event/progress 예시
-{
-  "1": {
-    "general": {
-      "closeEvent": "2025-06-01"
-    },
-    "rewards": {
-      "today": "2025-06-01",
-      "rewards": [...]
-    }
-  }
-}
-```
-<sub>※ 실제 응답 모델이 아닌 예시입니다.</sub>
-
 ### ✅ 4. 팝업 시스템 자동화 (MVC 구조 적용)
 
 #### 🎯 문제점
@@ -112,26 +75,5 @@ public class DinosaurEventController :
 
 #### 🧭 개선 방향
 - 컨트롤러는 모델 가공만 수행, 팝업은 UI 바인딩만 수행
-- SetDataFromController(model)와 같은 방식으로 자동화된 데이터 연결
+- 모델 기반 자동 데이터 바인딩 방식으로 UI 갱신 자동화
 
-```csharp
-// Controller
-// API호출등의 이벤트에 따른 VIEW 자동 갱신
-eventPopup.SetDataFromController(model);
-
-// View
-public void SetDataFromController(EventPopupModel model)
-{
-    titleText.text = model.Title;
-    descText.text = model.Description;
-    rewardIcons.Set(model.Rewards);
-}
-```
-<sub>※ 실제 사용된 코드가 아닌 예시입니다.</sub>
-
-<div align="center">
-✨ 이 시스템은 현재도 Live 환경에서 유지보수 중이며<br>
-신규 이벤트 개발 속도 향상, 휴먼 이슈 감소, 협업 효율성 향상 등<br>
-실질적인 성과를 만들어내며 동료 개발자들과 함께 지속적으로 개선 중입니다.
-
-</div>
