@@ -1,3 +1,9 @@
+**Tech Keywords**
+- Match-3 Board Logic
+- Object Interaction System
+- Object Pooling
+- DOTween Animation Sync
+
 # 인게임 오브젝트 개발
 
 이 문서는 퍼즐 게임 내 주요 상호작용 오브젝트를 구현한 사례를 정리합니다. 오브젝트들의 특성과 개발 포인트를 설명합니다.
