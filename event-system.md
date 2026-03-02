@@ -1,3 +1,9 @@
+**Tech Keywords**
+- Data-driven Event System
+- MVC Architecture
+- State Management
+- Live Ops Framework
+
 # 통합 이벤트 시스템 설계
 
 ## 개요
