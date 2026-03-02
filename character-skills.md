@@ -1,3 +1,9 @@
+**Tech Keywords**
+- Priority-based Algorithm
+- Range Scan System
+- State Machine
+- Skill Logic Design
+
 # 캐릭터 스킬 개발
 
 이 문서는 퍼즐 게임 내 등장 캐릭터들의 고유 능력을 구현한 사례들을 정리한 문서입니다.  
