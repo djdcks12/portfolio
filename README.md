@@ -10,7 +10,7 @@
 
 ---
 
-## 🧠 Technical Strength Snapshot
+## Technical Strength Snapshot
 
 ### Architecture & System Design
 
@@ -60,7 +60,7 @@
 
 ---
 
-## 🗂 Core Work Areas
+## Core Work Areas
 
 ### ⚙ 통합 이벤트 시스템
 
@@ -128,11 +128,8 @@
 
 ---
 
-## 🎯 Portfolio Philosophy
+## Portfolio Philosophy
 
 * 단순 구현보다 **구조와 맥락을 중시**합니다.
 * 라이브 서비스 환경에서 **지속 가능한 코드**를 목표로 합니다.
 * 팀과 서비스 전체의 효율을 높이는 개발을 지향합니다.
-
-> 이 포트폴리오는 실제 서비스에 적용된 시스템과
-> 그 과정에서의 문제 해결 경험을 중심으로 정리되어 있습니다.
