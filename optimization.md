@@ -1,3 +1,9 @@
+**Tech Keywords**
+- AssetBundle (LZ4)
+- Jenkins CI/CD
+- Unity Burst & Job System
+- DrawCall Optimization
+  
 # 시스템 최적화 및 자동화 경험 정리
 
 ## 작업 범위 요약
