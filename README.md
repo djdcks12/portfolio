@@ -76,7 +76,7 @@
 
 ---
 
-### [인게임 오브젝트](./ingame-objects.md) & [캐릭터 스킬](./character-skills..md)
+### [인게임 오브젝트](./ingame-objects.md) & [캐릭터 스킬](./character-skills.md)
 
 * 퍼즐 보드 기반 상호작용 오브젝트 설계
 * 우선순위 탐색 · 범위 연산 기반 캐릭터 스킬 구현
