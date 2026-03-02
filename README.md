@@ -10,37 +10,13 @@
 
 ---
 
-## Technical Strength Snapshot
+## 🔧 Core Technical Focus
 
-### Architecture & System Design
-
-* MVC 기반 UI / 이벤트 구조 설계
-* 공통 컨트롤러 · 데이터 기반 이벤트 파이프라인 구축
-* 확장성과 운영 안정성을 고려한 구조 표준화
-
-### Live Ops & Collaboration
-
-* 라이브 서비스 환경에서의 안정적 운영 경험
-* 기획 · 서버 · 아트 직군과의 협업을 구조적으로 해결
-* 휴먼 이슈 감소를 위한 시트 구조 개선 및 자동화 주도
-
-### Performance & Optimization
-
-* AssetBundle(LZ4) 구조 개선 및 로딩 지연 제거
-* 드로우콜 · 메모리 사용량 최적화
-* Burst Compiler 기반 고성능 연산 처리
-
-### Tooling & Productivity
-
-* Jenkins + Slack 기반 CI/CD 및 데이터 배포 자동화
-* Unity Editor 확장 및 내부 툴 개발로 팀 생산성 향상
-* QA/레벨 검증을 위한 오토플레이 시스템 개발
-
-### Gameplay & Algorithm
-
-* 매치3 퍼즐 보드 구조 및 오브젝트 설계
-* 우선순위 탐색 기반 스킬 알고리즘 구현
-* 휴리스틱 기반 자동 플레이 + ML-Agents 실험
+- Unity Client Architecture for Live Service Games
+- Data-driven Event & Content System
+- Performance Optimization (AssetBundle, Burst, DrawCall)
+- Internal Tooling & CI/CD Automation
+- Match-3 Gameplay & Board Algorithm Design
 
 ---
 
