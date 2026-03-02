@@ -1,3 +1,9 @@
+**Tech Keywords**
+- Live Content Framework
+- Server-driven Event Logic
+- MVC UI Implementation
+- Reward & Progression System
+
 # 🎮 콘텐츠 개발
 
 이 문서에서는 애니팡3의 콘텐츠 개발 설계와 구현을 중심으로 정리했습니다.
