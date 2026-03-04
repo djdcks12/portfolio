@@ -60,6 +60,107 @@
 
 <img src="./images/skill-scan-system.png" alt="스킬 범위 탐색 기능 다이어그램" width="250"/>
 
+<details>
+<summary><b>핵심 구조 — 우선순위 맵 기반 범위 탐색 & 전략 패턴</b></summary>
+
+#### 설계 의도
+
+캐릭터마다 스킬 범위가 다릅니다 (십자, 3×3, 단일 등).
+하지만 "후보 좌표 중 가장 높은 우선순위를 가진 위치를 찾는다"는 로직은 동일합니다.
+탐색 알고리즘을 고정하고, **범위 정의만 교체**할 수 있도록 전략 패턴을 적용했습니다.
+
+```csharp
+// --- 전략 패턴: 범위 정의 분리 (구조 예시) ---
+// 신규 스킬 추가 시 범위만 구현하면 탐색 로직은 재사용
+interface IScanPattern
+{
+    // 기준점의 보드 위치를 받아, 경계를 고려한 유효 오프셋만 반환
+    List<Vector2Int> GetOffsets(Vector2Int origin);
+}
+
+// 4성: 1-3-1 십자 — 보드 경계에서는 범위 밖 오프셋을 제외
+class CrossPattern : IScanPattern
+{
+    static readonly Vector2Int[] _baseOffsets =
+        { (0,0), (0,-1),(0,1), (-1,0),(1,0) };
+
+    List<Vector2Int> GetOffsets(Vector2Int origin)
+    {
+        var result = new List<Vector2Int>();
+        foreach (var offset in _baseOffsets)
+        {
+            var target = origin + offset;
+            if (IsInBounds(target))  // 보드 범위 내인 오프셋만 포함
+                result.Add(offset);
+        }
+        return result;
+    }
+}
+
+// 5성: 3×3 영역 — 모서리에서는 최대 4칸, 변에서는 최대 6칸
+class AreaPattern : IScanPattern
+{
+    // 동일한 경계 클리핑 로직, 기본 오프셋만 9칸으로 확장
+}
+
+// 3성: 1×1 단일
+class SinglePattern : IScanPattern
+{
+    List<Vector2Int> GetOffsets(Vector2Int origin) =>
+        new() { (0, 0) };
+}
+```
+
+#### 탐색 흐름: 후보 → 범위 내 점수 합산 → 최고 점수 좌표 선택
+
+```csharp
+// --- 탐색 알고리즘 (구조 예시) ---
+// 범위(pattern)만 주입하면 어떤 스킬이든 동일한 로직으로 동작
+// priorityMap: 보드 전체의 우선순위 점수 (미션 목표일수록 높음)
+// candidates: 스킬 발동 가능한 후보 좌표
+// pattern: 스킬별 범위 정의
+{
+    int bestScore = -1;
+    List<Vector2Int> bestTargets = new();
+
+    foreach (var candidate in candidates)
+    {
+        int score = 0;
+
+        // 후보 좌표를 기준으로, 경계를 고려한 유효 범위 내 셀의 우선순위를 합산
+        // GetOffsets가 이미 경계 밖 오프셋을 제외하고 반환
+        foreach (var offset in pattern.GetOffsets(candidate))
+        {
+            var target = candidate + offset;
+            score += priorityMap[target.y, target.x];
+        }
+
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestTargets.Clear();
+            bestTargets.Add(candidate);
+        }
+        else if (score == bestScore)
+        {
+            bestTargets.Add(candidate);
+        }
+    }
+
+    // 동점 시 Fisher-Yates 셔플로 공정한 랜덤 선택
+    // 특정 위치에 편향되지 않도록 보장
+    if (bestTargets.Count > 1)
+        Shuffle(bestTargets);
+
+    return bestTargets[0];
+}
+```
+
+이 구조 덕분에 3성/4성/5성 등급별 스킬을 추가할 때
+IScanPattern 구현체 하나만 작성하면 탐색 로직은 재사용할 수 있었습니다.
+
+</details>
+
 ---
 
 ## 3성/4성 전용 스킬 개발

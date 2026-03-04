@@ -68,8 +68,65 @@
 * 반복 파싱 로직 제거 및 모델 단위 관리
 
 ### 결과
-* 파싱 속도 개선 (3000회 기준 1200ms → 985ms)
-* 메모리 사용량 감소 및 데이터 구조 변경 시 대응 비용 감소
+* 데이터 구조 변경 시 대응 비용 감소 (필드 추가 시 파싱 코드 수정 불필요)
+* 메모리 사용량 감소 및 파싱 속도 소폭 개선 (3000회 기준 1200ms → 985ms)
+
+<details>
+<summary><b>핵심 구조 — 직렬화 어댑터 패턴으로 파싱 방식 통일</b></summary>
+
+#### 기존 문제: 데이터 타입마다 파싱 코드를 직접 작성
+
+기존에는 서버에서 받은 JSON을 SimpleJSON으로 키 하나씩 꺼내서 수동 바인딩했습니다.
+데이터 구조가 변경될 때마다 파싱 코드를 일일이 수정해야 했고,
+중첩 구조나 배열이 깊어질수록 실수가 발생했습니다.
+
+```csharp
+// --- Before: 필드마다 수동 파싱 ---
+id = json["id"].AsInt;
+name = json["name"].Value;
+rewards = new List<int>();
+foreach (var node in json["rewards"].AsArray)
+    rewards.Add(node.Value.AsInt);
+// 필드가 추가될 때마다 여기도 수정...
+```
+
+#### 개선: 어댑터 기반 자동 직렬화
+
+Unity.Serialization의 어댑터 패턴을 도입하여,
+데이터 클래스의 프로퍼티를 선언하면 자동으로 바인딩되는 구조로 전환했습니다.
+
+```csharp
+// --- After: 어댑터 기반 자동 직렬화 (구조 예시) ---
+// IJsonAdapter를 구현하면 리플렉션 기반으로 자동 바인딩
+// 데이터 클래스에 필드만 추가하면 파싱 코드 수정 불필요
+class EventDataAdapter : IJsonAdapter<EventDataModel>
+{
+    EventDataModel Deserialize(in JsonDeserializationContext<EventDataModel> context)
+    {
+        var view = context.SerializedValue.AsObjectView();
+        var result = context.GetInstance();
+
+        // 필드명과 JSON 키가 매칭되면 자동 처리
+        // 중첩 구조, 배열, nullable 모두 어댑터가 처리
+        context.ContinueVisitation(ref result, view);
+        return result;
+    }
+}
+
+// 데이터 클래스는 구조만 선언 — 파싱 로직 없음
+class EventDataModel
+{
+    int id;
+    string name;
+    List<int> rewards;
+    // 필드 추가 시 여기만 수정하면 자동 반영
+}
+```
+
+이 구조로 전환한 뒤, 신규 이벤트 데이터 타입 추가 시
+어댑터 1개 + 데이터 클래스 1개만 작성하면 되어 반복 작업이 크게 줄었습니다.
+
+</details>
 
 ---
 
@@ -118,15 +175,94 @@
 인게임 특수 블록 사용 시, 가장 효율적인 타격 각도를 실시간으로 계산하기 위해 고성능 연산 구조를 도입했습니다.
 
 ### 문제 인식
-* 81개 셀에 대해 모든 각도의 시뮬레이션을 수행해야 하므로, 일반적인 루프 연산 시 모바일 기기에서 프레임 드롭 발생
+* 81개 셀에 대해 모든 각도의 시뮬레이션을 수행해야 하며, 복수의 회전팡이 동시에 존재할 경우 한 프레임 내에 여러 건의 연산이 집중되므로 일반적인 루프 연산 시 모바일 기기에서 프레임 드롭 발생
 
 ### 개선 내용
 * **비트마스크 최적화**: 81개 셀의 상태를 직접 구현한 `UInt128` 구조체 기반의 비트 데이터로 관리하여 연산량 최소화
 * **Burst & Job System**: 연산 로직을 네이티브 코드로 컴파일하고 멀티 스레드로 분산 처리
 
 ### 결과
-* 복잡한 전 방향 시뮬레이션을 매 프레임 수행함에도 프레임을 안정적으로 유지
+* 복수의 회전팡이 동시에 존재하는 상황에서도 프레임을 안정적으로 유지
 * 오토플레이 시스템 및 사용자 편의 기능의 기술적 기반 마련
+
+<details>
+<summary><b>핵심 구조 — Burst + Job System + NativeContainer 기반 고성능 연산</b></summary>
+
+#### 문제: 81셀 × 360도 시뮬레이션을 턴마다, 복수 회전팡 동시 계산 시 한 프레임 내 수행해야 함
+
+회전형 특수 블록의 최적 타격 각도를 찾으려면 전 방향을 시뮬레이션해야 합니다.
+블록이 안정화되는 턴마다 발생하는 연산이지만, 복수의 회전팡이 동시에 존재할 경우 한 프레임 내에 여러 건이 집중되어 일반 C# 루프로는 모바일에서 프레임 드롭이 우려되었습니다.
+
+#### 해결 전략
+
+1. **비트마스크 압축** — 81셀 상태를 UInt128 구조체로 관리하여 비교 연산을 비트 연산으로 대체
+2. **NativeContainer** — 턴마다 반복 실행되는 연산에서 관리 힙(List 등)을 쓰면 GC 스파이크로 프레임 드롭 발생. NativeArray로 네이티브 힙에 할당하여 GC 압력을 원천 차단
+3. **Burst Compiler** — Burst는 IL을 LLVM IR로 변환하여 네이티브 코드로 컴파일. GC 참조가 있는 관리 타입(class, string 등)은 변환 자체가 불가능하므로 blittable struct + NativeContainer만 사용
+4. **Job System** — 각도별 시뮬레이션을 워커 스레드로 분산 처리
+
+```csharp
+// --- Burst + Job System 병렬 연산 (구조 예시) ---
+// Burst는 관리 타입(class 등)을 LLVM으로 변환할 수 없으므로
+// blittable struct + NativeArray만 사용 → GC 압력 제로
+// 네이티브 코드 컴파일로 IL 인터프리터 대비 루프 성능 대폭 향상
+[BurstCompile]
+struct RotationScoreJob : IJobParallelFor
+{
+    // 읽기 전용: 보드 상태 (비트마스크), 각도별 충돌 결과
+    [ReadOnly] public NativeArray<UInt128> boardState;
+    [ReadOnly] public NativeArray<AngleRangeData> angleRanges;
+    [ReadOnly] public NativeArray<int> priorityMap;
+
+    // 쓰기: 각 범위별 점수 결과
+    [WriteOnly] public NativeArray<int> scores;
+
+    // 각도 범위 단위로 병렬 실행
+    // Burst가 네이티브 코드로 컴파일 → IL 대비 루프 오버헤드 대폭 감소
+    public void Execute(int rangeIndex)
+    {
+        var range = angleRanges[rangeIndex];
+        int score = 0;
+
+        // 해당 각도 범위에서 타격되는 셀들의 우선순위를 합산
+        // UInt128 비트마스크로 타격 여부를 판정 → 분기 없는 연산
+        for (int cell = 0; cell < 81; cell++)
+        {
+            if (range.hitMask.GetBit(cell))
+                score += priorityMap[cell];
+        }
+
+        scores[rangeIndex] = score;
+    }
+}
+```
+
+```csharp
+// --- 메인 스레드 호출 흐름 (구조 예시) ---
+// NativeContainer 할당 — Temp 할당자로 프레임 내 자동 해제
+var scores = new NativeArray<int>(rangeCount, Allocator.TempJob);
+
+var job = new RotationScoreJob
+{
+    boardState = boardStateNative,
+    angleRanges = angleRangesNative,
+    priorityMap = priorityMapNative,
+    scores = scores
+};
+
+// 워커 스레드에 분산 → Complete로 대기
+job.Schedule(rangeCount, batchSize: 4).Complete();
+
+// 최고 점수 범위의 중간 각도를 최적 각도로 결정
+int bestRange = FindMaxIndex(scores);
+float optimalAngle = (angleRanges[bestRange].start + angleRanges[bestRange].end) / 2f;
+
+scores.Dispose();
+```
+
+이 구조로 전환한 뒤,
+복수의 회전팡이 동시에 존재하는 상황에서도 모바일에서 프레임을 안정적으로 유지할 수 있었습니다.
+
+</details>
 
 ---
 

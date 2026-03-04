@@ -94,6 +94,84 @@
   <br>
   <img src="./images/paint.gif" alt="물감 채우기 예시" width="300"/>
 
+<details>
+<summary><b>핵심 구조 — 8방향 인접 탐색 기반 타일 형태 자동 결정</b></summary>
+
+#### 설계 의도
+
+물감 타일은 인접한 타일의 유무에 따라 모양이 달라져야 합니다.
+새 타일이 추가되면 본인뿐 아니라 **주변 기존 타일의 형태도 바뀔 수 있으므로**,
+확산 시 전체 활성 타일을 재계산하는 구조로 설계했습니다.
+
+```csharp
+// --- 물감 확산 흐름 (구조 예시) ---
+bool hasNewTile = false;
+
+foreach (int index in destroyedIndices)
+{
+    // 기존 보드나 장애물이 없는 빈 공간에만 확산 가능
+    // +기타 예외 처리
+    if (CanSpreadTo(index))
+    {
+        CreateNewTile(index);
+        hasNewTile = true;
+    }
+}
+
+if (!hasNewTile) return;
+
+// 새 타일이 추가되면 모든 활성 타일의 형태를 재계산
+// → 인접 관계가 바뀌었으므로 기존 타일도 형태가 달라질 수 있음
+foreach (var tile in activeTiles)
+{
+    RecalculateShape(tile.Key);
+}
+```
+
+#### 8방향 인접 탐색 → 형태 결정 → 렌더링
+
+```csharp
+// --- 8방향 인접 탐색 → 형태 결정 (구조 예시) ---
+// 상하좌우 4방향 연결 패턴의 조합은 2^4 = 16가지이지만,
+// 회전 대칭을 고려하면 6가지 기본 형태로 축소됨.
+// "상·우 연결 여부"로 1차 분기한 뒤 나머지를 판정하는 방식으로 분기 깊이를 최소화.
+
+// 형태 결정 결과: 6가지 기본 형태 × 4방향 회전 + 모서리
+// type 1~6: 끝점 / 직선 / 곡선 / T자 / 교차 / 사면연결
+// rotation: 0 / 90 / 180 / 270
+// cornerLT, cornerRT, cornerLB, cornerRB: 모서리 스프라이트 표시 여부
+
+{
+    // 8방향 인접 셀 중 같은 타입의 타일을 수집
+    List<int> adjacentIndices = GetEightDirectionIndices(index);
+    List<TileData> neighbors = new();
+
+    foreach (int adj in adjacentIndices)
+    {
+        if (adj < 0 || adj >= BOARD_TOTAL) continue;
+        if (_activeTiles.ContainsKey(adj))
+            neighbors.Add(_activeTiles[adj]);
+    }
+
+    // 상하좌우 4방향 연결 상태로 기본 형태(6종) + 회전각 결정
+    // + 대각선 4방향으로 모서리 스프라이트 on/off 결정
+    var painter = new TileShapePainter();
+    ShapeResult result = painter.DetermineShape(_activeTiles[index], neighbors);
+
+    // 결정된 형태로 스프라이트 교체 + 회전 적용 + 모서리 렌더링
+    var renderer = GetTileRenderer(index);
+    renderer.SetBaseSprite(result.type, result.rotation);
+    renderer.SetCornerEdges(result.cornerLT, result.cornerRT,
+                            result.cornerLB, result.cornerRB);
+}
+```
+
+이 구조 덕분에 물감 확산 시 타일 간 시각적 연속성이 자동으로 유지되며,
+새로운 타일 타입(먹물 등)을 추가할 때도 `TileShapePainter`를 상속받아
+색상과 스프라이트만 교체하면 동일한 형태 결정 로직을 재사용할 수 있었습니다.
+
+</details>
+
 ---
 
 ## 오브젝트 미션화 시스템

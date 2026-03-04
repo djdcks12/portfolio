@@ -17,7 +17,7 @@
 
 ### 배경
 
-팀 업마가 점점 많아지고 병렬적으로 진행되면서,
+팀 업무가 점점 많아지고 병렬적으로 진행되면서,
 각자의 작업 일정과 진행 상태를 한눈에 파악하기 어려운 문제가 있었습니다.
 사내에 PM 직군이 없는 상태에서 구두 공유나 문서 기반 관리로는 
 일정 충돌이나 병목을 파악하는 데 한계가 있었습니다.
@@ -78,8 +78,123 @@ QA에서도 매 업데이트마다 수동으로 전체 스테이지를 테스트
 
 ### 결과
 
-* 레벨 담당자 반복 플레이 검증 업무 자동화, QA 수동 테스트 공수 제거
+* 레벨 담당자 반복 플레이 검증 업무 자동화, QA 수동 테스트 공수 대폭 감소
 * ML-Agents 확장 연구 결과를 사내 세미나에서 발표 → 수상 (아래 세미나 참조)
+
+<details>
+<summary><b>구조 — 다중 팩터 우선순위 스코어링 시스템</b></summary>
+
+#### 설계 의도
+
+오토플레이의 핵심은 "지금 보드에서 어디를 먼저 터뜨려야 하는가"를 판단하는 것입니다.
+단일 기준(예: 미션 목표만)으로는 복합적인 보드 상황을 판단할 수 없으므로,
+**5개 카테고리의 점수를 셀 단위로 합산**하여 최적 타겟을 결정하는 구조를 설계했습니다.
+
+```csharp
+// --- 다중 팩터 우선순위 계산 흐름 (구조 예시) ---
+
+// 1단계: 선처리 — 제외/0점 대상 사전 수집 + 예외 처리 계산
+foreach (var index in AllValidCells())
+{
+    CollectExceptions(index);       // 타격 불가능한 셀 수집
+    CollectZeroScoreTargets(index);  // 이미 목표 달성된 셀
+    CollectCustomBonuses(index);     // 여러 예외 처리
+}
+
+// 2단계: 카테고리별 점수 합산
+foreach (var index in AllValidCells())
+{
+    int block    = CalcBlockScore(index);     // 블록 타입·상태별 기본 점수
+    int obstacle = CalcObstacleScore(index);  // 장애물 제거 우선순위
+    int board    = CalcBoardScore(index);     // 보드 타일(얼음, 리본 등)
+
+    // 어느 하나라도 "제외" 판정이면 해당 셀은 건너뜀
+    if (IsExcluded(block, obstacle, board))
+        continue;
+
+    scoreMap[index] = block + obstacle + board;
+}
+
+// 3단계: 맥락적 보너스 적용 + 음수 클램핑
+foreach (var key in scoreMap.Keys)
+{
+    scoreMap[key] += customBonusMap.GetValueOrDefault(key, 0);
+    scoreMap[key] = Math.Max(0, scoreMap[key]);
+}
+```
+
+#### 맥락적 보너스: 기본 카테고리로 표현할 수 없는 상황 판단
+
+```csharp
+// --- 맥락적 보너스 규칙 (구조 예시) ---
+// 기본 점수만으로는 맥락적 판단이 불가능. 
+// 이를 별도 카테고리로 분리하고, 각 규칙의 조건과 점수를 시트 데이터로 관리하여
+// 코드 수정 없이 판단 기준을 추가·조정할 수 있도록 설계.
+{
+    foreach (var rule in contextualRules)
+    {
+        switch (rule.type)
+        {
+            case A:
+            case B:
+            case C:
+
+            // 예외처리 데이터 관리
+        }
+    }
+}
+```
+
+이 구조 덕분에 시트 데이터에 조작만으로 오토플레이 판단 기준을 조정할 수 있었습니다.
+
+#### 우선순위 맵을 활용한 최적 매칭 판단
+
+위에서 계산된 우선순위 맵을 오토플레이가 실제로 사용하는 흐름입니다.
+모든 매칭 가능한 패턴을 탐색하고, **효과 범위 내 우선순위 합산이 가장 높은 수를 선택**합니다.
+
+```csharp
+// --- 오토플레이 최적 수 선택 (구조 예시) ---
+
+// 우선순위 맵 생성 (위 코드의 결과물)
+var priorityScoreMap = CalculateTotalScores();
+
+// Phase 1: 일반 매칭 — 한 인덱스 당 가능 한 모든 패턴 × 전체 셀에서 최고 점수 탐색
+foreach (var pattern in matchPatterns)
+{
+    foreach (var cell in allValidCells)
+    {
+        // 패턴 매칭 가능 여부 확인 (같은 색, 장애물 미차단 등)
+        if (!CanMatch(pattern, cell)) continue;
+
+        var matchedCells = GetMatchedCells(pattern, cell);
+
+        // 패턴 기본 점수 (매칭 패턴에 따른 보정 점수(ex 특수 블록등이 만들어지면 점수가 높음))
+        int score = GetPatternBaseScore(pattern);
+
+        // 보드판 우선순위 상황에 따른 점수
+        score += priorityScoreMap.Socre(matchedCells);
+
+        if (score > bestResult.maxScore)
+            bestResult = new Result(score, matchedCells);
+    }
+}
+
+// Phase 2: 특수블록 — 효과 범위 내 우선순위 비교
+// 각 특수블록의 효과 범위를 계산하고 범위 내 우선순위를 합산하여 비교
+foreach (var specialBlock in allSpecialBlocks)
+{
+    var effectArea = CalcEffectArea(specialBlock);  // 타입별 효과 범위 계산
+    int score = priorityScoreMap.Score(effectArea);
+
+    if (score > bestResult.maxScore)
+        bestResult = new Result(score, specialBlock);
+}
+```
+
+이 2단계 구조(우선순위 맵 생성 → 매칭 판단에 활용) 덕분에,
+판단 기준과 매칭 로직이 분리되어 각각 독립적으로 확장할 수 있었습니다.
+
+</details>
 
 ---
 
